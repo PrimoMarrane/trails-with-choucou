@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Trail {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  difficulty      String?  // Easy, Moderate, Hard, Expert
+  dateCreated     DateTime @default(now())
+  dateCompleted   DateTime?
+  
+  // GPX file reference
+  gpxFileUrl      String
+  
+  // Calculated metrics
+  distanceKm      Float?
+  elevationGainM  Float?
+  elevationLossM  Float?
+  durationMinutes Int?
+  
+  // Geographic bounds
+  startLat        Float?
+  startLng        Float?
+  endLat          Float?
+  endLng          Float?
+  minLat          Float?
+  maxLat          Float?
+  minLng          Float?
+  maxLng          Float?
+  
+  // Additional metadata
+  tags            String[]
+  location        String?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  trackPoints     TrackPoint[]
+  
+  @@index([dateCompleted])
+  @@index([difficulty])
+  @@index([distanceKm])
+}
+
+model TrackPoint {
+  id        String   @id @default(cuid())
+  trailId   String
+  trail     Trail    @relation(fields: [trailId], references: [id], onDelete: Cascade)
+  
+  lat       Float
+  lng       Float
+  elevation Float?
+  timestamp DateTime?
+  orderIndex Int
+  
+  @@index([trailId])
+  @@index([orderIndex])
+}

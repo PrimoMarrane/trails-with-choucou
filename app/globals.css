@@ -26,6 +26,19 @@ body {
     rgb(var(--background-start-rgb));
 }
 
+/* Ensure form controls always show visible text (avoid inheriting body color that can match input bg) */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  color: #111827; /* gray-900 */
+  background-color: #fff;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af; /* gray-400 */
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

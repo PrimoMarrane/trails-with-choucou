@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -38,28 +38,116 @@ interface Trail {
   }[];
 }
 
+const emptyEditForm = {
+  name: '',
+  description: '',
+  difficulty: '',
+  dateCompleted: '',
+  tags: '',
+  location: '',
+};
+
 export default function TrailDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [trail, setTrail] = useState<Trail | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState(emptyEditForm);
 
-  useEffect(() => {
-    if (params.id) {
-      fetchTrail();
-    }
-  }, [params.id]);
-
-  const fetchTrail = async () => {
+  const fetchTrail = useCallback(async () => {
+    if (!params.id) return;
     try {
       const response = await fetch(`/api/trails/${params.id}`);
       const data = await response.json();
-      setTrail(data.trail);
+      const raw = data.trail;
+      if (!raw) {
+        setTrail(null);
+        return;
+      }
+      // Normalize numeric fields (API may return numbers as strings)
+      const num = (v: unknown): number | null =>
+        v == null || v === '' ? null : typeof v === 'number' && !Number.isNaN(v) ? v : Number(v) || null;
+      setTrail({
+        ...raw,
+        distanceKm: num(raw.distanceKm),
+        elevationGainM: num(raw.elevationGainM),
+        elevationLossM: num(raw.elevationLossM),
+        trackPoints: Array.isArray(raw.trackPoints)
+          ? raw.trackPoints.map((tp: { lat: number; lng: number; elevation?: number | null }) => ({
+              lat: tp.lat,
+              lng: tp.lng,
+              elevation: tp.elevation ?? null,
+            }))
+          : [],
+      });
     } catch (error) {
       console.error('Error fetching trail:', error);
     } finally {
       setLoading(false);
+    }
+  }, [params.id]);
+
+  useEffect(() => {
+    if (params.id) {
+      setLoading(true);
+      fetchTrail();
+    }
+  }, [params.id, fetchTrail]);
+
+  const startEditing = () => {
+    if (!trail) return;
+    setEditForm({
+      name: trail.name,
+      description: trail.description ?? '',
+      difficulty: trail.difficulty ?? '',
+      dateCompleted: trail.dateCompleted
+        ? format(new Date(trail.dateCompleted), 'yyyy-MM-dd')
+        : '',
+      tags: trail.tags?.length ? trail.tags.join(', ') : '',
+      location: trail.location ?? '',
+    });
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditForm(emptyEditForm);
+  };
+
+  const handleSave = async () => {
+    if (!trail || saving) return;
+    setSaving(true);
+    try {
+      const tags = editForm.tags
+        ? editForm.tags.split(',').map((t) => t.trim()).filter(Boolean)
+        : [];
+      const response = await fetch(`/api/trails/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editForm.name || trail.name,
+          description: editForm.description || null,
+          difficulty: editForm.difficulty || null,
+          dateCompleted: editForm.dateCompleted || null,
+          tags,
+          location: editForm.location || null,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Update failed');
+      }
+      await fetchTrail();
+      setIsEditing(false);
+      setEditForm(emptyEditForm);
+    } catch (error) {
+      console.error('Error saving trail:', error);
+      alert(error instanceof Error ? error.message : 'Failed to save');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -129,20 +217,47 @@ export default function TrailDetailPage() {
               </div>
             </div>
             <div className="flex gap-3">
-              <a
-                href={trail.gpxFileUrl}
-                download
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                Download GPX
-              </a>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                {deleting ? 'Deleting...' : 'Delete'}
-              </button>
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={cancelEditing}
+                    disabled={saving}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={startEditing}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  >
+                    Edit
+                  </button>
+                  <a
+                    href={trail.gpxFileUrl}
+                    download
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  >
+                    Download GPX
+                  </a>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleting ? 'Deleting...' : 'Delete'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -150,88 +265,151 @@ export default function TrailDetailPage() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Map */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div key={`trail-map-${trail.id}`} className="h-96">
-                <MapView selectedTrail={{ trail, trackPoints: trail.trackPoints }} />
-              </div>
+        {isEditing ? (
+          /* Edit form */
+          <div className="bg-white rounded-lg shadow-md p-6 max-w-2xl space-y-6">
+            <h2 className="text-xl font-bold text-gray-900">Edit trail</h2>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+              <input
+                type="text"
+                value={editForm.name}
+                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
             </div>
-
-            {/* Description */}
-            {trail.description && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold mb-4">Description</h2>
-                <p className="text-gray-700 whitespace-pre-wrap">{trail.description}</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="Describe your trail..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
+              <select
+                value={editForm.difficulty}
+                onChange={(e) => setEditForm((f) => ({ ...f, difficulty: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">Select difficulty</option>
+                <option value="Easy">Easy</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Hard">Hard</option>
+                <option value="Expert">Expert</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date completed</label>
+              <input
+                type="date"
+                value={editForm.dateCompleted}
+                onChange={(e) => setEditForm((f) => ({ ...f, dateCompleted: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+              <input
+                type="text"
+                value={editForm.location}
+                onChange={(e) => setEditForm((f) => ({ ...f, location: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="e.g., Swiss Alps"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+              <input
+                type="text"
+                value={editForm.tags}
+                onChange={(e) => setEditForm((f) => ({ ...f, tags: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="hiking, mountain, scenic (comma-separated)"
+              />
+            </div>
           </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Stats Card */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold mb-4">Trail Stats</h2>
-              <div className="space-y-4">
-                {trail.difficulty && (
-                  <div>
-                    <p className="text-sm text-gray-600">Difficulty</p>
-                    <p className="text-lg font-semibold">{trail.difficulty}</p>
-                  </div>
-                )}
-                
-                {trail.distanceKm !== null && (
-                  <div>
-                    <p className="text-sm text-gray-600">Distance</p>
-                    <p className="text-lg font-semibold">{trail.distanceKm.toFixed(2)} km</p>
-                  </div>
-                )}
-                
-                {trail.elevationGainM !== null && (
-                  <div>
-                    <p className="text-sm text-gray-600">Elevation Gain</p>
-                    <p className="text-lg font-semibold">{trail.elevationGainM.toFixed(0)} m</p>
-                  </div>
-                )}
-                
-                {trail.elevationLossM !== null && (
-                  <div>
-                    <p className="text-sm text-gray-600">Elevation Loss</p>
-                    <p className="text-lg font-semibold">{trail.elevationLossM.toFixed(0)} m</p>
-                  </div>
-                )}
-                
-                {trail.dateCompleted && (
-                  <div>
-                    <p className="text-sm text-gray-600">Completed</p>
-                    <p className="text-lg font-semibold">
-                      {format(new Date(trail.dateCompleted), 'MMM d, yyyy')}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Tags */}
-            {trail.tags && trail.tags.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold mb-4">Tags</h2>
-                <div className="flex flex-wrap gap-2">
-                  {trail.tags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm"
-                    >
-                      {tag}
-                    </span>
-                  ))}
+        ) : (
+          <div className="grid lg:grid-cols-3 gap-8">
+            {/* Main Content */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Map */}
+              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div key={`trail-map-${trail.id}`} className="h-96">
+                  <MapView selectedTrail={{ trail, trackPoints: trail.trackPoints }} />
                 </div>
               </div>
-            )}
+
+              {/* Description */}
+              {trail.description && (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Description</h2>
+                  <p className="text-gray-700 whitespace-pre-wrap">{trail.description}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Sidebar */}
+            <div className="space-y-6">
+              {/* Stats Card */}
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Trail Stats</h2>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Difficulty</p>
+                    <p className="text-lg font-semibold text-gray-900">{trail.difficulty || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Distance</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {trail.distanceKm != null ? `${Number(trail.distanceKm).toFixed(2)} km` : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Elevation Gain</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {trail.elevationGainM != null ? `${Number(trail.elevationGainM).toFixed(0)} m` : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Elevation Loss</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {trail.elevationLossM != null ? `${Number(trail.elevationLossM).toFixed(0)} m` : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Completed</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {trail.dateCompleted
+                        ? format(new Date(trail.dateCompleted), 'MMM d, yyyy')
+                        : '—'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tags */}
+              {trail.tags && trail.tags.length > 0 && (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Tags</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {trail.tags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

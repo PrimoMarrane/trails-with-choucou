@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// GET single trail by ID
+// GET single trail by ID (same scalar fields as list API + full trackPoints for map)
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -9,9 +9,38 @@ export async function GET(
   try {
     const trail = await prisma.trail.findUnique({
       where: { id: params.id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        difficulty: true,
+        dateCreated: true,
+        dateCompleted: true,
+        distanceKm: true,
+        elevationGainM: true,
+        elevationLossM: true,
+        durationMinutes: true,
+        startLat: true,
+        startLng: true,
+        endLat: true,
+        endLng: true,
+        minLat: true,
+        maxLat: true,
+        minLng: true,
+        maxLng: true,
+        tags: true,
+        location: true,
+        gpxFileUrl: true,
+        createdAt: true,
+        updatedAt: true,
         trackPoints: {
-          orderBy: { orderIndex: 'asc' },
+          orderBy: { orderIndex: 'asc' as const },
+          select: {
+            lat: true,
+            lng: true,
+            elevation: true,
+            orderIndex: true,
+          },
         },
       },
     });

@@ -17,7 +17,7 @@ interface Trail {
   name: string;
   description?: string | null;
   difficulty?: string | null;
-  dateCompleted?: Date | null;
+  dateCompleted?: Date | string | null;
   distanceKm?: number | null;
   elevationGainM?: number | null;
   location?: string | null;
@@ -30,6 +30,7 @@ interface Trail {
   maxLat?: number | null;
   minLng?: number | null;
   maxLng?: number | null;
+  trackPoints?: { lat: number; lng: number }[];
 }
 
 export default function TrailsPage() {
@@ -56,9 +57,13 @@ export default function TrailsPage() {
       Object.entries(filters).forEach(([key, value]) => {
         if (value) params.append(key, value);
       });
+      // Include simplified track points for map view
+      params.append('includeTrackPoints', 'true');
       
       const response = await fetch(`/api/trails?${params.toString()}`);
       const data = await response.json();
+      console.log('Trails fetched:', data.trails?.length, 'trails');
+      console.log('First trail:', data.trails?.[0]);
       setTrails(data.trails);
     } catch (error) {
       console.error('Error fetching trails:', error);
@@ -165,7 +170,7 @@ export default function TrailsPage() {
                 ))}
               </div>
             ) : (
-              <div className="h-[calc(100vh-300px)] rounded-lg overflow-hidden shadow-lg">
+              <div key="map-view" className="h-[calc(100vh-300px)] rounded-lg overflow-hidden shadow-lg">
                 <MapView trails={trails} onTrailClick={(id) => window.location.href = `/trails/${id}`} />
               </div>
             )}

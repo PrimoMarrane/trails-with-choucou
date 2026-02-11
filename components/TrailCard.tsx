@@ -9,7 +9,7 @@ interface TrailCardProps {
     name: string;
     description?: string | null;
     difficulty?: string | null;
-    dateCompleted?: Date | null;
+    dateCompleted?: Date | string | null;
     distanceKm?: number | null;
     elevationGainM?: number | null;
     location?: string | null;

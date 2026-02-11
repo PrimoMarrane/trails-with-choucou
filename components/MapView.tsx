@@ -26,6 +26,7 @@ interface Trail {
   maxLat?: number | null;
   minLng?: number | null;
   maxLng?: number | null;
+  trackPoints?: { lat: number; lng: number }[];
 }
 
 interface TrackPoint {
@@ -63,6 +64,7 @@ export default function MapView({ trails, selectedTrail, onTrailClick }: MapView
   // Calculate bounds for all trails or selected trail
   let bounds: L.LatLngBoundsExpression | null = null;
   
+  
   if (selectedTrail && selectedTrail.trackPoints.length > 0) {
     const coords = selectedTrail.trackPoints.map(tp => [tp.lat, tp.lng] as [number, number]);
     bounds = coords;
@@ -86,13 +88,17 @@ export default function MapView({ trails, selectedTrail, onTrailClick }: MapView
   const defaultCenter: [number, number] = [46.5, 6.5]; // Default to Switzerland
   const defaultZoom = 10;
   
+  // Generate a unique key to force remount when switching modes
+  const mapKey = selectedTrail ? `selected-${selectedTrail.trail.id}` : `all-${trails?.length || 0}`;
+  
   return (
     <MapContainer
-      center={defaultCenter}
-      zoom={defaultZoom}
-      style={{ height: '100%', width: '100%' }}
-      className="z-0"
-    >
+        key={mapKey}
+        center={defaultCenter}
+        zoom={defaultZoom}
+        style={{ height: '100%', width: '100%' }}
+        className="z-0"
+      >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -122,22 +128,29 @@ export default function MapView({ trails, selectedTrail, onTrailClick }: MapView
         </Polyline>
       )}
       
-      {/* Render all trails as simplified lines (without full track points) */}
+      {/* Render all trails with track points or simplified lines */}
       {!selectedTrail && trails && trails.map(trail => {
-        if (!trail.startLat || !trail.startLng || !trail.endLat || !trail.endLng) {
+        // Use track points if available, otherwise fall back to start/end
+        let positions: [number, number][] = [];
+        
+        if (trail.trackPoints && trail.trackPoints.length > 0) {
+          positions = trail.trackPoints.map(tp => [tp.lat, tp.lng] as [number, number]);
+        } else if (trail.startLat && trail.startLng && trail.endLat && trail.endLng) {
+          positions = [
+            [trail.startLat, trail.startLng],
+            [trail.endLat, trail.endLng],
+          ];
+        } else {
           return null;
         }
         
         return (
           <Polyline
             key={trail.id}
-            positions={[
-              [trail.startLat, trail.startLng],
-              [trail.endLat, trail.endLng],
-            ]}
+            positions={positions}
             color={difficultyColors[trail.difficulty || ''] || '#3b82f6'}
-            weight={3}
-            opacity={0.6}
+            weight={4}
+            opacity={0.8}
             eventHandlers={{
               click: () => onTrailClick?.(trail.id),
             }}

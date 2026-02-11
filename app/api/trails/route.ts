@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
       if (maxDistance) where.distanceKm.lte = parseFloat(maxDistance);
     }
     
+    const includeTrackPoints = searchParams.get('includeTrackPoints') === 'true';
+    
     const trails = await prisma.trail.findMany({
       where,
       orderBy: { [sortBy]: sortOrder },
@@ -56,10 +58,42 @@ export async function GET(request: NextRequest) {
         tags: true,
         location: true,
         gpxFileUrl: true,
+        // Include simplified track points for map display
+        trackPoints: includeTrackPoints ? {
+          select: {
+            lat: true,
+            lng: true,
+            orderIndex: true,
+          },
+          orderBy: { orderIndex: 'asc' },
+        } : false,
       },
     });
     
-    return NextResponse.json({ trails });
+    // Simplify track points (keep every Nth point) to reduce data size
+    const simplifiedTrails = trails.map(trail => {
+      if (!includeTrackPoints || !trail.trackPoints) {
+        return trail;
+      }
+      
+      const points = trail.trackPoints;
+      const maxPoints = 50; // Maximum points per trail for map display
+      
+      if (points.length <= maxPoints) {
+        return trail;
+      }
+      
+      // Sample every Nth point
+      const step = Math.ceil(points.length / maxPoints);
+      const simplified = points.filter((_, index) => index % step === 0 || index === points.length - 1);
+      
+      return {
+        ...trail,
+        trackPoints: simplified,
+      };
+    });
+    
+    return NextResponse.json({ trails: simplifiedTrails });
   } catch (error) {
     console.error('Error fetching trails:', error);
     return NextResponse.json(

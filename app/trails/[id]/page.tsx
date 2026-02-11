@@ -16,13 +16,21 @@ interface Trail {
   name: string;
   description?: string | null;
   difficulty?: string | null;
-  dateCompleted?: Date | null;
+  dateCompleted?: Date | string | null;
   distanceKm?: number | null;
   elevationGainM?: number | null;
   elevationLossM?: number | null;
   location?: string | null;
   tags: string[];
   gpxFileUrl: string;
+  startLat?: number | null;
+  startLng?: number | null;
+  endLat?: number | null;
+  endLng?: number | null;
+  minLat?: number | null;
+  maxLat?: number | null;
+  minLng?: number | null;
+  maxLng?: number | null;
   trackPoints: {
     lat: number;
     lng: number;
@@ -147,7 +155,7 @@ export default function TrailDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Map */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="h-96">
+              <div key={`trail-map-${trail.id}`} className="h-96">
                 <MapView selectedTrail={{ trail, trackPoints: trail.trackPoints }} />
               </div>
             </div>

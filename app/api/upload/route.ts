@@ -20,6 +20,22 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // --- File guards ---
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: 'File too large (max 10 MB)' },
+        { status: 400 }
+      );
+    }
+
+    if (!file.name.toLowerCase().endsWith('.gpx')) {
+      return NextResponse.json(
+        { error: 'Only .gpx files are accepted' },
+        { status: 400 }
+      );
+    }
     
     // Read file content
     const gpxContent = await file.text();

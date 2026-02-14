@@ -81,9 +81,9 @@ export default function TrailCard({ trail }: TrailCardProps) {
         
         {trail.tags && trail.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3">
-            {trail.tags.map((tag, index) => (
+            {trail.tags.map((tag) => (
               <span
-                key={index}
+                key={tag}
                 className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded"
               >
                 {tag}

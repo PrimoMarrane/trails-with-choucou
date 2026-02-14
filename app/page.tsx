@@ -1,4 +1,11 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Trails with Chouchou',
+  description:
+    'Your personal trail management system. Upload, visualize, and analyze your hiking adventures.',
+};
 
 export default function Home() {
   return (

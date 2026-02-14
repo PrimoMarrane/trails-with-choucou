@@ -1,5 +1,11 @@
 import Link from 'next/link';
 import UploadForm from '@/components/UploadForm';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Upload Trail | Trails with Chouchou',
+  description: 'Upload a GPX file to add a new trail to your collection.',
+};
 
 export default function UploadPage() {
   return (

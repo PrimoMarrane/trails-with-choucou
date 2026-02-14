@@ -62,6 +62,8 @@ export async function GET(
   }
 }
 
+const ALLOWED_DIFFICULTIES = ['Easy', 'Moderate', 'Hard', 'Expert'] as const;
+
 // PATCH update trail
 export async function PATCH(
   request: NextRequest,
@@ -70,16 +72,34 @@ export async function PATCH(
   try {
     const body = await request.json();
     const { name, description, difficulty, dateCompleted, tags, location } = body;
-    
+
+    // --- Validation ---
+    if (name !== undefined && (typeof name !== 'string' || name.trim() === '')) {
+      return NextResponse.json({ error: 'Name must be a non-empty string' }, { status: 400 });
+    }
+    if (difficulty !== undefined && difficulty !== null &&
+        !ALLOWED_DIFFICULTIES.includes(difficulty)) {
+      return NextResponse.json({ error: 'Invalid difficulty value' }, { status: 400 });
+    }
+    if (dateCompleted !== undefined && dateCompleted !== null) {
+      const d = new Date(dateCompleted);
+      if (isNaN(d.getTime())) {
+        return NextResponse.json({ error: 'Invalid dateCompleted' }, { status: 400 });
+      }
+    }
+    if (tags !== undefined && (!Array.isArray(tags) || tags.some((t: unknown) => typeof t !== 'string'))) {
+      return NextResponse.json({ error: 'Tags must be an array of strings' }, { status: 400 });
+    }
+
     const trail = await prisma.trail.update({
       where: { id: params.id },
       data: {
         name,
-        description,
-        difficulty,
-        dateCompleted: dateCompleted ? new Date(dateCompleted) : null,
-        tags,
-        location,
+        description: description ?? undefined,
+        difficulty: difficulty ?? undefined,
+        dateCompleted: dateCompleted ? new Date(dateCompleted) : dateCompleted === null ? null : undefined,
+        tags: tags ?? undefined,
+        location: location ?? undefined,
       },
     });
     
@@ -111,16 +131,21 @@ export async function DELETE(
       );
     }
     
-    // If using local storage, delete the file
+    // If using local storage, delete the file (with path-traversal guard)
     if (!process.env.BLOB_READ_WRITE_TOKEN && trail.gpxFileUrl.startsWith('/gpx/')) {
       const fs = await import('fs/promises');
       const path = await import('path');
-      const filePath = path.join(process.cwd(), 'public', trail.gpxFileUrl);
-      
-      try {
-        await fs.unlink(filePath);
-      } catch (error) {
-        console.error('Error deleting file:', error);
+      const publicDir = path.join(process.cwd(), 'public');
+      const resolved = path.resolve(publicDir, trail.gpxFileUrl.replace(/^\//, ''));
+
+      if (resolved.startsWith(publicDir + path.sep)) {
+        try {
+          await fs.unlink(resolved);
+        } catch (error) {
+          console.error('Error deleting file:', error);
+        }
+      } else {
+        console.error('Path traversal blocked:', trail.gpxFileUrl);
       }
     }
     

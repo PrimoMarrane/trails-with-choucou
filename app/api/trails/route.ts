@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+const ALLOWED_SORT_COLUMNS = ['dateCreated', 'dateCompleted', 'name', 'distanceKm', 'elevationGainM'] as const;
+type SortColumn = (typeof ALLOWED_SORT_COLUMNS)[number];
+
 // GET all trails with optional filtering
 export async function GET(request: NextRequest) {
   try {
@@ -9,8 +12,14 @@ export async function GET(request: NextRequest) {
     const difficulty = searchParams.get('difficulty');
     const minDistance = searchParams.get('minDistance');
     const maxDistance = searchParams.get('maxDistance');
-    const sortBy = searchParams.get('sortBy') || 'dateCreated';
-    const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const rawSortBy = searchParams.get('sortBy') || 'dateCreated';
+    const rawSortOrder = searchParams.get('sortOrder') || 'desc';
+
+    // Whitelist sort inputs
+    const sortBy: SortColumn = ALLOWED_SORT_COLUMNS.includes(rawSortBy as SortColumn)
+      ? (rawSortBy as SortColumn)
+      : 'dateCreated';
+    const sortOrder: 'asc' | 'desc' = rawSortOrder === 'asc' ? 'asc' : 'desc';
     
     const where: any = {};
     

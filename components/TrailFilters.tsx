@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface TrailFiltersProps {
   onFilterChange: (filters: {
@@ -23,10 +23,22 @@ export default function TrailFilters({ onFilterChange }: TrailFiltersProps) {
     sortOrder: 'desc',
   });
 
+  // Debounce: emit filter changes after 300ms of inactivity
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      onFilterChange(filters);
+    }, 300);
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onFilterChange is stable from parent
+  }, [filters]);
+
   const handleChange = (key: string, value: string) => {
-    const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
-    onFilterChange(newFilters);
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleReset = () => {
@@ -39,13 +51,13 @@ export default function TrailFilters({ onFilterChange }: TrailFiltersProps) {
       sortOrder: 'desc',
     };
     setFilters(resetFilters);
-    onFilterChange(resetFilters);
+    onFilterChange(resetFilters); // immediate on reset
   };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-bold">Filters</h2>
+        <h2 className="text-lg font-bold text-gray-900">Filters</h2>
         <button
           onClick={handleReset}
           className="text-sm text-primary-600 hover:text-primary-700"
@@ -53,10 +65,10 @@ export default function TrailFilters({ onFilterChange }: TrailFiltersProps) {
           Reset
         </button>
       </div>
-      
+
       {/* Search */}
       <div>
-        <label className="block text-sm font-medium mb-2">Search</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
         <input
           type="text"
           value={filters.search}
@@ -65,10 +77,10 @@ export default function TrailFilters({ onFilterChange }: TrailFiltersProps) {
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
       </div>
-      
+
       {/* Difficulty */}
       <div>
-        <label className="block text-sm font-medium mb-2">Difficulty</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
         <select
           value={filters.difficulty}
           onChange={(e) => handleChange('difficulty', e.target.value)}
@@ -81,10 +93,10 @@ export default function TrailFilters({ onFilterChange }: TrailFiltersProps) {
           <option value="Expert">Expert</option>
         </select>
       </div>
-      
+
       {/* Distance Range */}
       <div>
-        <label className="block text-sm font-medium mb-2">Distance (km)</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Distance (km)</label>
         <div className="flex gap-2">
           <input
             type="number"
@@ -102,10 +114,10 @@ export default function TrailFilters({ onFilterChange }: TrailFiltersProps) {
           />
         </div>
       </div>
-      
+
       {/* Sort By */}
       <div>
-        <label className="block text-sm font-medium mb-2">Sort By</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
         <select
           value={filters.sortBy}
           onChange={(e) => handleChange('sortBy', e.target.value)}
@@ -118,10 +130,10 @@ export default function TrailFilters({ onFilterChange }: TrailFiltersProps) {
           <option value="elevationGainM">Elevation Gain</option>
         </select>
       </div>
-      
+
       {/* Sort Order */}
       <div>
-        <label className="block text-sm font-medium mb-2">Order</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
         <div className="flex gap-2">
           <button
             onClick={() => handleChange('sortOrder', 'asc')}
